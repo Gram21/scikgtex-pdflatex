@@ -2,6 +2,8 @@
 
 `scikgtex-pdflatex` is a LaTeX package prototype for adding **machine-readable annotations** to papers while staying compatible with **pdfLaTeX** and common LaTeX workflows.
 
+It is inspired by [@Christof93/SciKGTeX](https://github.com/Christof93/SciKGTeX), but is aimed at users who want similar annotation-oriented functionality without requiring LuaLaTeX.
+
 It is designed for cases where you want to annotate entities such as software, people, datasets, or methods, while keeping the text usable in normal LaTeX documents.
 
 ## What it does
