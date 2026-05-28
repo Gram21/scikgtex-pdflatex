@@ -8,7 +8,7 @@
 \makeatletter
 
 % ============================================================
-% Document metadata
+% Document metadata and options
 % ============================================================
 
 \def\scikg@title{}
@@ -16,14 +16,22 @@
 \def\scikg@keywords{}
 \def\scikg@doi{}
 \def\scikg@license{}
+\def\scikg@format{tsv}
+
 \newif\ifscikg@anchors
+\newif\ifscikg@silentanchors
+\newif\ifscikg@strict
 \scikg@anchorsfalse
+\scikg@silentanchorsfalse
+\scikg@strictfalse
 
 \define@key{scikgsetup}{title}{\def\scikg@title{#1}}
 \define@key{scikgsetup}{author}{\def\scikg@author{#1}}
 \define@key{scikgsetup}{keywords}{\def\scikg@keywords{#1}}
 \define@key{scikgsetup}{doi}{\def\scikg@doi{#1}}
 \define@key{scikgsetup}{license}{\def\scikg@license{#1}}
+\define@key{scikgsetup}{format}{\def\scikg@format{#1}}
+
 \define@key{scikgsetup}{anchors}[true]{%
   \edef\scikg@tmp{#1}%
   \def\scikg@true{true}%
@@ -31,6 +39,26 @@
     \scikg@anchorstrue
   \else
     \scikg@anchorsfalse
+  \fi
+}
+
+\define@key{scikgsetup}{silentanchors}[true]{%
+  \edef\scikg@tmp{#1}%
+  \def\scikg@true{true}%
+  \ifx\scikg@tmp\scikg@true
+    \scikg@silentanchorstrue
+  \else
+    \scikg@silentanchorsfalse
+  \fi
+}
+
+\define@key{scikgsetup}{strict}[true]{%
+  \edef\scikg@tmp{#1}%
+  \def\scikg@true{true}%
+  \ifx\scikg@tmp\scikg@true
+    \scikg@stricttrue
+  \else
+    \scikg@strictfalse
   \fi
 }
 
@@ -52,9 +80,26 @@
 % ============================================================
 
 \newwrite\scikg@out
+\def\scikg@outfile{\jobname.scikg.tsv}
+
+\newcommand{\scikg@selectoutfile}{%
+  \edef\scikg@tmpformat{\scikg@format}%
+  \def\scikg@jsonl{jsonl}%
+  \ifx\scikg@tmpformat\scikg@jsonl
+    \def\scikg@outfile{\jobname.scikg.jsonl}%
+  \else
+    \def\scikg@outfile{\jobname.scikg.tsv}%
+  \fi
+}
 
 \AtBeginDocument{%
-  \immediate\openout\scikg@out=\jobname.scikg.jsonl
+  \scikg@selectoutfile
+  \immediate\openout\scikg@out=\scikg@outfile
+  \edef\scikg@tmpformat{\scikg@format}%
+  \def\scikg@tsv{tsv}%
+  \ifx\scikg@tmpformat\scikg@tsv
+    \immediate\write\scikg@out{n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext}%
+  \fi
 }
 
 \AtEndDocument{%
@@ -72,6 +117,7 @@
 \def\scikg@ann@id{}
 \def\scikg@ann@label{}
 \def\scikg@ann@text{}
+\def\scikg@ann@anchor{}
 \newcount\scikg@anncount
 \scikg@anncount=0
 
@@ -82,6 +128,7 @@
   \def\scikg@ann@id{}%
   \def\scikg@ann@label{}%
   \def\scikg@ann@text{}%
+  \def\scikg@ann@anchor{}%
 }
 
 \define@key{scikgann}{mode}[inline]{%
@@ -101,34 +148,174 @@
 }
 
 % ============================================================
-% Invisible anchor for inline annotations
+% Diagnostics
 % ============================================================
 
-\newcommand{\scikg@maybeanchor}{%
-  \ifscikg@anchors
-    \Hy@raisedlink{%
-      \hyper@anchorstart{scikg.\the\scikg@anncount}\hyper@anchorend
-    }%
+\newcommand{\scikg@warn}[1]{%
+  \PackageWarning{scikgtex-pdflatex}{#1}%
+}
+
+\newcommand{\scikg@error}[1]{%
+  \PackageError{scikgtex-pdflatex}{#1}{Disable strict=true or fix the annotation input.}%
+}
+
+\newcommand{\scikg@issue}[1]{%
+  \ifscikg@strict
+    \scikg@error{#1}%
+  \else
+    \scikg@warn{#1}%
+  \fi
+}
+
+\newcommand{\scikg@validateannotation}{%
+  \ifx\scikg@ann@type\@empty
+    \scikg@issue{Annotation \the\scikg@anncount\space missing required key `type'}%
+  \fi
+  \ifx\scikg@ann@id\@empty
+    \scikg@issue{Annotation \the\scikg@anncount\space missing required key `id'}%
+  \fi
+  \ifx\scikg@ann@text\@empty
+    \scikg@issue{Annotation \the\scikg@anncount\space has empty text argument}%
   \fi
 }
 
 % ============================================================
-% Internal writer
+% Label registration and referencing
 % ============================================================
 
-\newcommand{\scikg@writeannotation}{%
+\newcommand{\scikg@registerlabel}{%
+  \ifscikg@haslabel
+    \@ifundefined{scikg@label@\scikg@ann@label}{%
+      \expandafter\xdef\csname scikg@label@\scikg@ann@label\endcsname{\scikg@ann@anchor}%
+      \expandafter\xdef\csname scikg@labeltext@\scikg@ann@label\endcsname{\scikg@ann@text}%
+    }{%
+      \scikg@issue{Duplicate annotation label `\scikg@ann@label'}%
+    }%
+  \fi
+}
+
+\newcommand{\scikgref}[1]{%
+  \@ifundefined{scikg@label@#1}{%
+    \PackageWarning{scikgtex-pdflatex}{Undefined annotation label `#1'}%
+    ??%
+  }{%
+    \hyperlink{\csname scikg@label@#1\endcsname}{%
+      \@ifundefined{scikg@labeltext@#1}{#1}{\csname scikg@labeltext@#1\endcsname}%
+    }%
+  }%
+}
+
+% ============================================================
+% Anchor handling
+% ============================================================
+
+\newcommand{\scikg@makeanchorname}{%
+  \edef\scikg@ann@anchor{scikg.\the\scikg@anncount}%
+}
+
+\newcommand{\scikg@placeanchor}{%
+  \Hy@raisedlink{%
+    \hyper@anchorstart{\scikg@ann@anchor}\hyper@anchorend
+  }%
+}
+
+\newcommand{\scikg@maybeanchor}{%
+  \ifscikg@inline
+    \ifscikg@anchors
+      \scikg@placeanchor
+    \fi
+  \else
+    \ifscikg@silentanchors
+      \scikg@placeanchor
+    \fi
+  \fi
+}
+
+% ============================================================
+% Sanitization helpers
+% ============================================================
+
+% Prototype-level sanitization only.
+% Goal: reduce obvious output breakage for common cases.
+
+\newcommand{\scikg@sanitize@common}[1]{%
   \begingroup
-    \edef\scikg@modevalue{%
-      \ifscikg@inline inline\else silent\fi
-    }%
-    \edef\scikg@labelvalue{%
-      \ifscikg@haslabel \scikg@ann@label\else \empty\fi
-    }%
+  \edef\scikg@tmpa{\detokenize{#1}}%
+  \xdef\scikg@sanitized{\scikg@tmpa}%
+  \endgroup
+}
+
+% For TSV we rely on detokenize as a coarse stabilization layer.
+\newcommand{\scikg@sanitize@tsv}[1]{%
+  \scikg@sanitize@common{#1}%
+}
+
+% For JSONL-like output we also use detokenize.
+% This is not fully JSON-safe, but is safer than raw expansion.
+\newcommand{\scikg@sanitize@json}[1]{%
+  \scikg@sanitize@common{#1}%
+}
+
+% ============================================================
+% Output helpers
+% ============================================================
+
+\newcommand{\scikg@modevalue}{%
+  \ifscikg@inline inline\else silent\fi
+}
+
+\newcommand{\scikg@writejsonl}{%
+  \begingroup
+    \scikg@sanitize@json{\scikg@ann@anchor}%
+    \let\scikg@jsonanchor\scikg@sanitized
+    \scikg@sanitize@json{\scikg@ann@type}%
+    \let\scikg@jsontype\scikg@sanitized
+    \scikg@sanitize@json{\scikg@ann@id}%
+    \let\scikg@jsonid\scikg@sanitized
+    \scikg@sanitize@json{\scikg@ann@label}%
+    \let\scikg@jsonlabel\scikg@sanitized
+    \scikg@sanitize@json{\scikg@ann@text}%
+    \let\scikg@jsontext\scikg@sanitized
     \edef\scikg@line{%
-      {"n":"\the\scikg@anncount","mode":"\scikg@modevalue","type":"\scikg@ann@type","id":"\scikg@ann@id","label":"\scikg@labelvalue","text":"\scikg@ann@text","page":"\thepage"}%
+      {"n":"\the\scikg@anncount","anchor":"\scikg@jsonanchor","mode":"\scikg@modevalue","type":"\scikg@jsontype","id":"\scikg@jsonid","label":"\scikg@jsonlabel","page":"\thepage","text":"\scikg@jsontext"}%
     }%
     \immediate\write\scikg@out{\scikg@line}%
   \endgroup
+}
+
+\newcommand{\scikg@writetsv}{%
+  \begingroup
+    \scikg@sanitize@tsv{\scikg@ann@anchor}%
+    \let\scikg@tsvanchor\scikg@sanitized
+    \scikg@sanitize@tsv{\scikg@ann@type}%
+    \let\scikg@tsvtype\scikg@sanitized
+    \scikg@sanitize@tsv{\scikg@ann@id}%
+    \let\scikg@tsvid\scikg@sanitized
+    \scikg@sanitize@tsv{\scikg@ann@label}%
+    \let\scikg@tsvlabel\scikg@sanitized
+    \scikg@sanitize@tsv{\scikg@ann@text}%
+    \let\scikg@tsvtext\scikg@sanitized
+    \immediate\write\scikg@out{%
+      \the\scikg@anncount^^I%
+      \scikg@tsvanchor^^I%
+      \scikg@modevalue^^I%
+      \scikg@tsvtype^^I%
+      \scikg@tsvid^^I%
+      \scikg@tsvlabel^^I%
+      \thepage^^I%
+      \scikg@tsvtext%
+    }%
+  \endgroup
+}
+
+\newcommand{\scikg@writeannotation}{%
+  \edef\scikg@tmpformat{\scikg@format}%
+  \def\scikg@jsonl{jsonl}%
+  \ifx\scikg@tmpformat\scikg@jsonl
+    \scikg@writejsonl
+  \else
+    \scikg@writetsv
+  \fi
 }
 
 % ============================================================
@@ -140,8 +327,11 @@
   \setkeys{scikgann}{#1}%
   \def\scikg@ann@text{#2}%
   \global\advance\scikg@anncount by 1\relax
+  \scikg@makeanchorname
+  \scikg@validateannotation
+  \scikg@registerlabel
+  \scikg@maybeanchor
   \ifscikg@inline
-    \scikg@maybeanchor
     \scikg@ann@text
   \fi
   \scikg@writeannotation

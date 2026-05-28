@@ -1,46 +1,44 @@
 # scikgtex-pdflatex
 
-`scikgtex-pdflatex` is a minimal prototype package for adding **machine-readable annotations** to LaTeX documents while remaining compatible with **common LaTeX workflows such as pdfLaTeX**.
+`scikgtex-pdflatex` is a minimal prototype package for adding machine-readable annotations to LaTeX documents while staying compatible with common LaTeX workflows such as **pdfLaTeX**.
 
-The package is inspired by the idea of tools like SciKGTeX, but is designed for users who do **not** want to depend on LuaLaTeX. Its goal is to let you annotate important entities in a paper while keeping the annotated text usable in normal document text.
+The package is inspired by the general idea of SciKG-style semantic annotation, but is designed for users who do not want to depend on LuaLaTeX. Its goal is to let you annotate important entities in a paper while keeping the annotated text usable in normal document text.
 
-In particular, the package supports two annotation modes:
+A central design requirement is:
 
-- **inline annotations**: the annotated text is printed normally in the PDF and also exported as metadata
-- **silent annotations**: the annotation is exported as metadata, but the text is not printed
+- **inline annotations** should print their text normally in the PDF
+- **silent annotations** should record metadata without printing the text
 
-In addition to inline and silent annotations, the package can also:
+The package also supports:
 
-- write document-level PDF metadata
-- export annotations to a sidecar file
-- optionally create invisible PDF anchors
-- register labels for annotations and link to them with `\scikgref{...}`
+- document-level PDF metadata
+- sidecar export in TSV or JSONL-like format
+- optional invisible PDF anchors
+- annotation labels and references via `\scikgref{...}`
+- optional stricter validation
+
+For a working usage example, see `example.tex`.
 
 ## Status
 
-This package is currently a **prototype**. It is intended as a starting point for experimentation and extension, not yet as a production-ready scholarly metadata framework.
+This package is still a **prototype**. It is intended as a foundation for experimentation and extension, not yet as a production-ready semantic publishing framework.
 
-Current implementation level:
+Version 6 improves stability over earlier versions by adding:
 
-- works with standard LaTeX/pdfLaTeX workflows
-- supports inline and silent annotations
-- supports document metadata export to the PDF
-- supports sidecar export in TSV or JSONL-like format
-- includes basic warnings for missing required fields
+- duplicate-label warnings
+- optional strict mode
+- better sidecar sanitization using `\detokenize`
+- improved `\scikgref` output
+- optional anchors for silent annotations too
 
-Known limitations include:
-
-- escaping/sanitization is still minimal
-- duplicate labels are not yet detected
-- JSON output is less robust than TSV
-- inline annotations are exported externally rather than embedded as full semantic RDF structures inside the PDF body
+Even so, output escaping is still only prototype-level.
 
 ## Features
 
 - Compatible with **pdfLaTeX**
-- Single-command annotation interface
+- Single main annotation command
 - `mode=inline` and `mode=silent`
-- Annotation fields:
+- Supported annotation fields:
   - `type`
   - `id`
   - `label` (optional)
@@ -49,23 +47,25 @@ Known limitations include:
   - `tsv` (default, recommended)
   - `jsonl`
 - Optional invisible anchors for inline annotations
+- Optional invisible anchors for silent annotations
 - Cross-reference support via `\scikgref{label}`
+- Duplicate-label detection
+- Optional strict validation
 
 ## Installation
 
-At this prototype stage, installation is manual.
+At this stage, installation is manual.
 
-Put the package file
+Place the following files in your working directory:
 
 - `scikgtex-pdflatex.sty`
+- `example.tex` (optional, but recommended to test usage)
 
-into the same directory as your `.tex` document, or into a location where your TeX installation can find it.
+You can then load the package with:
 
-For the demo, also keep:
-
-- `example.tex`
-
-in the same working directory.
+```tex
+\usepackage{scikgtex-pdflatex}
+```
 
 ## Requirements
 
@@ -77,48 +77,27 @@ The package currently depends on:
 
 These are commonly available in standard LaTeX distributions.
 
-A typical document also uses:
+Typical example documents may also use:
 
 - `fontenc`
 - `inputenc`
 - `lmodern`
 
-depending on your setup.
-
-## Basic idea
-
-The package separates two concerns:
-
-1. **visible document text**
-2. **machine-readable annotation output**
-
-This means you can write normal paper text such as:
-
-```tex
-This paper uses \scikgannotate[mode=inline,type=software,id={rrid:SCR_014198}]{Cytoscape}.
-```
-
-and the word `Cytoscape` will appear normally in the document, while the annotation is also written to the sidecar metadata file.
-
-By contrast, you can also record metadata without printing text:
-
-```tex
-\scikgannotate[mode=silent,type=person,id={orcid:0000-0002-1825-0097}]{Alice Smith}
-```
-
-This creates the annotation record, but does not print `Alice Smith` into the visible document.
+depending on the environment.
 
 ## Quick start
 
-A minimal workflow looks like this:
+A minimal workflow is:
 
 1. load the package
-2. configure document metadata with `\scikgsetup`
-3. annotate text with `\scikgannotate`
+2. define document metadata with `\scikgsetup`
+3. annotate entities with `\scikgannotate`
 4. compile with pdfLaTeX
 5. inspect the generated sidecar file
 
-### Minimal example
+For a complete demonstration, compile `example.tex`.
+
+## Basic example
 
 ```tex
 \documentclass{article}
@@ -126,16 +105,17 @@ A minimal workflow looks like this:
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
-
 \usepackage{scikgtex-pdflatex}
 
 \scikgsetup{
-  title={A Minimal SciKG-like Prototype for pdfLaTeX v5},
+  title={A Minimal SciKG-like Prototype for pdfLaTeX},
   author={Gram21},
   keywords={semantic publishing, metadata, latex, pdfLaTeX},
   doi={10.0000/example-doi},
   license={CC-BY-4.0},
   anchors=true,
+  silentanchors=true,
+  strict=false,
   format=tsv
 }
 
@@ -147,6 +127,8 @@ for visualization.
 
 \scikgannotate[mode=silent,type=person,id={orcid:0000-0002-1825-0097},label={corr-author}]{Alice Smith}
 
+You can refer back to \scikgref{viz-tool}.
+
 \end{document}
 ```
 
@@ -154,17 +136,16 @@ A fuller working example is included in `example.tex`.
 
 ## `example.tex`
 
-The repository includes an `example.tex` file that demonstrates the intended usage of the package.
+The included `example.tex` demonstrates:
 
-It shows:
-
+- package loading
 - document metadata setup
 - inline annotations
 - silent annotations
-- optional anchor generation
-- label-based annotation references using `\scikgref{...}`
+- anchor creation
+- annotation references using `\scikgref{...}`
 
-If you want to see how the package is meant to be used in practice, start by compiling `example.tex`.
+If you want to understand intended usage, start with `example.tex`.
 
 ## Compilation
 
@@ -174,20 +155,19 @@ Compile with a standard pdfLaTeX workflow, for example:
 pdflatex example.tex
 ```
 
-Depending on your setup, you may run pdfLaTeX more than once to stabilize references.
+You may want to compile more than once if you rely on hyperlink-related behavior.
 
-After compilation, you should get:
+Expected outputs include:
 
 - `example.pdf`
-- a sidecar annotation file:
-  - `example.scikg.tsv` if `format=tsv`
-  - or `example.scikg.jsonl` if `format=jsonl`
+- `example.scikg.tsv` if `format=tsv`
+- or `example.scikg.jsonl` if `format=jsonl`
 
 ## Package interface
 
-## 1. Document metadata setup
+## 1. Document setup
 
-Use `\scikgsetup{...}` to configure package-level metadata and output behavior.
+Use `\scikgsetup{...}` to configure metadata and package behavior.
 
 ### Syntax
 
@@ -199,6 +179,8 @@ Use `\scikgsetup{...}` to configure package-level metadata and output behavior.
   doi={...},
   license={...},
   anchors=true,
+  silentanchors=false,
+  strict=false,
   format=tsv
 }
 ```
@@ -206,57 +188,61 @@ Use `\scikgsetup{...}` to configure package-level metadata and output behavior.
 ### Supported keys
 
 #### `title`
-Document title written into PDF metadata.
+Document title written to PDF metadata.
 
 #### `author`
-Document author written into PDF metadata.
+Document author written to PDF metadata.
 
 #### `keywords`
-Keywords written into PDF metadata.
+Keywords written to PDF metadata.
 
 #### `doi`
-DOI stored in the PDF subject metadata.
+Stored in the PDF subject metadata.
 
 #### `license`
-License information stored in the PDF subject metadata.
+Stored in the PDF subject metadata.
 
 #### `anchors`
-Controls whether inline annotations receive invisible PDF anchors.
+Controls whether **inline annotations** get invisible PDF anchors.
 
 Allowed values:
 
 - `true`
-- anything else is treated as false
+- any other value is treated as false
 
-Example:
+#### `silentanchors`
+Controls whether **silent annotations** also get invisible PDF anchors.
 
-```tex
-anchors=true
-```
+Allowed values:
+
+- `true`
+- any other value is treated as false
+
+#### `strict`
+Controls whether annotation validation problems become warnings or package errors.
+
+Allowed values:
+
+- `true` — validation failures raise package errors
+- `false` — validation failures raise warnings only
 
 #### `format`
 Controls the sidecar export format.
 
 Supported values:
 
-- `tsv` — recommended and default
+- `tsv` — default and recommended
 - `jsonl`
 
-Example:
+## 2. Annotation command
+
+The main annotation command is:
 
 ```tex
-format=tsv
+\scikgannotate[<options>]{<text>}
 ```
 
-## 2. Annotations
-
-The main command is:
-
-```tex
-\scikgannotate[<key=value options>]{<text>}
-```
-
-### Supported annotation keys
+### Supported annotation options
 
 #### `mode`
 Controls whether the annotation text is printed.
@@ -266,10 +252,10 @@ Supported values:
 - `inline`
 - `silent`
 
-`inline` is the default.
+Default: `inline`
 
 #### `type`
-Describes the semantic class of the annotation.
+Semantic class of the annotation.
 
 Examples:
 
@@ -279,7 +265,7 @@ Examples:
 - `method`
 
 #### `id`
-The external identifier for the entity.
+External identifier for the annotated entity.
 
 Examples:
 
@@ -289,19 +275,13 @@ Examples:
 - `wikidata:Q113145171`
 
 #### `label`
-Optional internal label for cross-referencing the annotation.
-
-Example:
-
-```tex
-label={viz-tool}
-```
+Optional internal label for later reference via `\scikgref{...}`.
 
 ## Annotation modes
 
 ### Inline annotations
 
-Inline annotations print the annotated text in the document and also export the annotation.
+Inline annotations print their text normally in the PDF and also export annotation metadata.
 
 Example:
 
@@ -309,17 +289,17 @@ Example:
 \scikgannotate[mode=inline,type=software,id={rrid:SCR_014198}]{Cytoscape}
 ```
 
-Visible result in the PDF:
+Visible result:
 
-- `Cytoscape`
+- `Cytoscape` appears in the text
 
 Metadata result:
 
-- annotation record written to the sidecar file
+- annotation record is written to the sidecar file
 
 ### Silent annotations
 
-Silent annotations export the annotation without printing the text.
+Silent annotations export metadata but do not print the annotation text.
 
 Example:
 
@@ -327,17 +307,46 @@ Example:
 \scikgannotate[mode=silent,type=person,id={orcid:0000-0002-1825-0097}]{Alice Smith}
 ```
 
-Visible result in the PDF:
+Visible result:
 
 - nothing is printed
 
 Metadata result:
 
-- annotation record written to the sidecar file
+- annotation record is written to the sidecar file
+
+If `silentanchors=true` is enabled, a silent annotation can still create a PDF anchor.
+
+## Labels and references
+
+If you assign a label:
+
+```tex
+\scikgannotate[mode=inline,type=software,id={rrid:SCR_014198},label={viz-tool}]{Cytoscape}
+```
+
+you can later refer to it with:
+
+```tex
+\scikgref{viz-tool}
+```
+
+In version 6, `\scikgref{viz-tool}` tries to display the **annotated text** (`Cytoscape`) instead of the raw label name.
+
+### Undefined labels
+
+If a label is undefined, the package:
+
+- emits a package warning
+- prints `??`
+
+### Duplicate labels
+
+If a label is used more than once, the package emits a warning by default, or an error if `strict=true`.
 
 ## Convenience commands
 
-The package also provides convenience wrappers for common annotation types.
+The package includes convenience wrappers.
 
 ### Software
 
@@ -367,37 +376,13 @@ The package also provides convenience wrappers for common annotation types.
 \scikgmethodsilent{wikidata:Q113145171}{PageRank}
 ```
 
-These wrappers are just shorthand for `\scikgannotate[...]`.
-
-## Cross-references with labels
-
-If you assign a `label` to an annotation, you can reference it later with:
-
-```tex
-\scikgref{viz-tool}
-```
-
-Example:
-
-```tex
-\scikgannotate[mode=inline,type=software,id={rrid:SCR_014198},label={viz-tool}]{Cytoscape}
-
-See annotation \scikgref{viz-tool}.
-```
-
-### Notes about `\scikgref`
-
-- If anchors are enabled, the reference becomes a hyperlink to the annotation anchor.
-- The visible text of the reference is currently the label itself.
-- If the label is undefined, the package prints `??` and emits a package warning.
-
 ## Output files
 
-## PDF output
+## PDF metadata
 
-The package writes document metadata into the produced PDF using `hyperref` and `hyperxmp`.
+The package writes document-level metadata into the generated PDF using `hyperref` and `hyperxmp`.
 
-Currently this includes:
+This currently includes:
 
 - title
 - author
@@ -406,16 +391,16 @@ Currently this includes:
 
 ## Sidecar output
 
-Each annotation is exported into a sidecar file.
+Each annotation is written to a sidecar file named from the TeX job name.
 
-The output file name is based on the TeX job name:
+Depending on `format`, the output file is either:
 
 - `\jobname.scikg.tsv`
-- or `\jobname.scikg.jsonl`
+- `\jobname.scikg.jsonl`
 
-### TSV format
+## TSV output
 
-TSV is the default and recommended output format.
+TSV is the default and recommended format.
 
 Header:
 
@@ -423,7 +408,7 @@ Header:
 n	anchor	mode	type	id	label	page	text
 ```
 
-Example rows:
+Example:
 
 ```text
 1	scikg.1	inline	software	rrid:SCR_014198	viz-tool	1	Cytoscape
@@ -431,9 +416,9 @@ Example rows:
 3	scikg.3	silent	person	orcid:0000-0002-1825-0097	corr-author	1	Alice Smith
 ```
 
-### JSONL format
+## JSONL output
 
-If `format=jsonl` is selected, each annotation is written as one JSON-like line.
+If `format=jsonl` is selected, each annotation is written as one JSON-like record.
 
 Example:
 
@@ -442,96 +427,72 @@ Example:
 {"n":"2","anchor":"scikg.2","mode":"silent","type":"person","id":"orcid:0000-0002-1825-0097","label":"corr-author","page":"1","text":"Alice Smith"}
 ```
 
-Note that JSONL output is still prototype-level and not fully escaped.
+Note: JSONL output remains prototype-level and is not guaranteed to be fully JSON-safe for all TeX input.
 
-## Warnings and validation
+## Validation behavior
 
-The package currently emits warnings for:
+The package validates:
 
 - missing `type`
 - missing `id`
 - empty annotation text
+- duplicate labels
 - undefined `\scikgref{...}` labels
 
-These warnings do not stop compilation; they are diagnostic only.
+Behavior depends on `strict`:
 
-## Example workflow
+- `strict=false`: warnings
+- `strict=true`: package errors for validation failures during annotation registration
 
-A typical usage pattern might look like this:
+## Sanitization
 
-1. define document metadata in `\scikgsetup`
-2. annotate entities inline where they appear in the text
-3. use silent annotations for metadata that should not appear visibly
-4. compile the document
-5. post-process the sidecar file if needed
+Version 6 adds coarse sanitization using `\detokenize` before writing sidecar output.
 
-For a complete demonstration, see `example.tex`.
+This improves stability for common cases, but is still not a complete escaping strategy.
+
+### Practical recommendation
+
+Use `format=tsv` unless you specifically need JSONL-like output.
 
 ## Design rationale
 
-This prototype is designed around a simple principle:
+The package is built around one main principle:
 
-> annotated text should remain usable as normal LaTeX content
+> annotated text should remain normal LaTeX text whenever possible
 
-That is why inline annotations print their text directly instead of replacing it with a special visual object.
+That is why inline annotations print their content directly into the document while separately exporting machine-readable metadata.
 
-This makes the package easy to use in ordinary prose, for example:
+This allows writing prose such as:
 
 ```tex
 We analyzed \scikgsoftware{rrid:SCR_014198}{Cytoscape} output using
 \scikgmethod{wikidata:Q113145171}{PageRank}.
 ```
 
-The sentence reads normally in the PDF, while still emitting annotation metadata.
+with natural visible text and parallel annotation output.
 
 ## Limitations
 
-This is still a prototype. Important limitations include:
+This is still a prototype. Current limitations include:
 
-- escaping of special characters is incomplete
-- tabs/newlines inside annotation text may break TSV output
-- JSONL output is not fully JSON-safe
-- duplicate annotation labels are not yet detected
-- silent annotations do not create visible text
-- silent annotations currently do not create physical PDF anchors in the same way inline annotations do
-- `\scikgref{...}` displays the label rather than the original annotation text
+- escaping is improved but still incomplete
+- JSONL output is still only approximate
+- TSV output can still be affected by unusual content
+- no schema validation beyond required fields
+- no automatic duplicate-resolution for labels
+- annotation metadata is exported to sidecar files rather than embedded as a rich RDF graph in the PDF body
 
-## When to use TSV vs JSONL
+## Suggested usage
 
-### Use TSV if:
-- you want the most robust current output mode
-- you plan to post-process annotations with scripts
-- your data is mostly simple text without complex escaping needs
+Use this package if you want to:
 
-### Use JSONL if:
-- you want a more structured export shape
-- you are comfortable treating the current output as prototype-level
-- you plan to improve escaping in a future version
+- annotate entities in a paper
+- keep inline annotations visible in normal prose
+- use silent annotations for hidden metadata
+- stay compatible with pdfLaTeX
+- export annotations for post-processing
 
-## Future directions
-
-Possible future improvements include:
-
-- better escaping/sanitization
-- duplicate-label detection
-- strict validation mode
-- richer reference output
-- exporting annotation content together with labels
-- richer PDF embedding beyond sidecar export
-- schema-aware output formats such as JSON-LD or RDF
-
-## Summary
-
-`scikgtex-pdflatex` provides a simple way to experiment with **semantic annotations in ordinary LaTeX documents** without requiring LuaLaTeX.
-
-Use it when you want to:
-
-- keep annotated text visible in the document
-- attach structured metadata to entities in the paper
-- stay in a pdfLaTeX-friendly workflow
-- generate a machine-readable sidecar export for further processing
-
-To get started, compile `example.tex` and inspect the generated `.scikg.tsv` or `.scikg.jsonl` file.
+To get started, compile `example.tex` and inspect the generated sidecar file.
 
 ## License
 
