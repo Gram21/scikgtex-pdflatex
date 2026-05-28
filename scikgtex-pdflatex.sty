@@ -1,0 +1,98 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{scikgtex-pdflatex}[2026/05/28 Minimal SciKG-like metadata annotations for pdfLaTeX]
+
+\RequirePackage{ifpdf}
+\RequirePackage{hyperref}
+\RequirePackage{hyperxmp}
+
+% ----------------------------
+% Stored document metadata
+% ----------------------------
+\def\scikg@title{}
+\def\scikg@author{}
+\def\scikg@keywords{}
+\def\scikg@doi{}
+\def\scikg@license{}
+
+% Simple key setup interface
+\newcommand{\scikgsetup}[1]{\scikg@parsekeys#1,\@nil}
+
+\def\scikg@parsekeys#1,#2\@nil{%
+  \ifx\relax#1\relax
+  \else
+    \scikg@assign#1==\@nil
+    \scikg@parsekeys#2\@nil
+  \fi
+}
+
+\def\scikg@assign#1=#2=#3\@nil{%
+  \def\scikg@key{#1}%
+  \def\scikg@val{#2}%
+  \expandafter\ifx\csname scikg@set@\scikg@key\endcsname\relax
+    % ignore unknown keys
+  \else
+    \csname scikg@set@\scikg@key\endcsname{\scikg@val}%
+  \fi
+}
+
+\def\scikg@set@title#1{\def\scikg@title{#1}}
+\def\scikg@set@author#1{\def\scikg@author{#1}}
+\def\scikg@set@keywords#1{\def\scikg@keywords{#1}}
+\def\scikg@set@doi#1{\def\scikg@doi{#1}}
+\def\scikg@set@license#1{\def\scikg@license{#1}}
+
+% ----------------------------
+% PDF metadata hookup
+% ----------------------------
+\AtBeginDocument{%
+  \hypersetup{%
+    pdftitle={\scikg@title},
+    pdfauthor={\scikg@author},
+    pdfkeywords={\scikg@keywords},
+    pdfsubject={DOI: \scikg@doi\space License: \scikg@license}%
+  }%
+}
+
+% ----------------------------
+% Sidecar annotation output
+% ----------------------------
+\newwrite\scikg@out
+
+\AtBeginDocument{%
+  \immediate\openout\scikg@out=\jobname.scikg.jsonl
+}
+
+\AtEndDocument{%
+  \immediate\closeout\scikg@out
+}
+
+% Fallback page number string
+\newcommand{\scikg@pagevalue}{\thepage}
+
+% ----------------------------
+% Minimal inline annotation
+% Syntax:
+%   \scikgannotate{<type>}{<id>}{<visible text>}
+%
+% Prints visible text normally.
+% Also writes one JSON-like line to sidecar.
+% ----------------------------
+\newcommand{\scikgannotate}[3]{%
+  #3%
+  \begingroup
+    \edef\scikg@line{%
+      {"type":"#1","id":"#2","text":"#3","page":"\scikg@pagevalue"}%
+    }%
+    \immediate\write\scikg@out{\scikg@line}%
+  \endgroup
+}
+
+% ----------------------------
+% Convenience wrappers
+% ----------------------------
+\newcommand{\scikgperson}[2]{\scikgannotate{person}{#1}{#2}}
+\newcommand{\scikgsoftware}[2]{\scikgannotate{software}{#1}{#2}}
+\newcommand{\scikgdataset}[2]{\scikgannotate{dataset}{#1}{#2}}
+\newcommand{\scikgmethod}[2]{\scikgannotate{method}{#1}{#2}}
+
+\endinput

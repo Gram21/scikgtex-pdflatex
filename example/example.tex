@@ -1,0 +1,36 @@
+\documentclass{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+\usepackage{scikgtex-pdflatex}
+
+\scikgsetup{
+  title=A Minimal SciKG-like Prototype for pdfLaTeX,
+  author=Gram21,
+  keywords=semantic publishing, metadata, latex, pdfLaTeX,
+  doi=10.0000/example-doi,
+  license=CC-BY-4.0
+}
+
+\title{A Minimal SciKG-like Prototype for pdfLaTeX}
+\author{Gram21}
+\date{}
+
+\begin{document}
+\maketitle
+
+This paper uses \scikgsoftware{rrid:SCR_014198}{Cytoscape}
+for visualization and applies the \scikgmethod{wikidata:Q113145171}{PageRank algorithm}
+to rank entities.
+
+The curated records were compared against
+\scikgdataset{doi:10.5281/zenodo.1234567}{an archived benchmark dataset}.
+
+We also refer to \scikgperson{orcid:0000-0002-1825-0097}{Alice Smith}
+as the corresponding investigator.
+
+\scikgannotate{software}{rrid:SCR_014198}{Cytoscape}.
+
+\end{document}
