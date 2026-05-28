@@ -21,7 +21,7 @@
 \tl_new:N \g_scikg_doi_tl
 \tl_new:N \g_scikg_license_tl
 \tl_new:N \g_scikg_format_tl
-\tl_gset:Nn \g_scikg_format_tl { tsv }
+\tl_gset:Nn \g_scikg_format_tl { both }
 
 \bool_new:N \g_scikg_anchors_bool
 \bool_new:N \g_scikg_silentanchors_bool
@@ -32,6 +32,7 @@
 \bool_gset_false:N \g_scikg_strict_bool
 
 \iow_new:N \g_scikg_out_iow
+\iow_new:N \g_scikg_jsonl_iow
 \int_new:N \g_scikg_annotation_int
 
 \prop_new:N \g_scikg_label_anchor_prop
@@ -317,10 +318,10 @@
       }
   }
 
-\cs_new_protected:Npn \scikg_write_jsonl:
+\cs_new_protected:Npn \scikg_write_jsonl_to:N #1
   {
     \scikg_prepare_sanitized_fields:
-    \iow_now:Nx \g_scikg_out_iow
+    \iow_now:Nx #1
       {
         \c_left_brace_str
         "n":"\int_use:N \g_scikg_annotation_int",
@@ -335,11 +336,21 @@
       }
   }
 
+\cs_new_protected:Npn \scikg_write_jsonl:
+  { \scikg_write_jsonl_to:N \g_scikg_out_iow }
+
 \cs_new_protected:Npn \scikg_write_annotation:
   {
     \str_if_eq:VnTF \g_scikg_format_tl { jsonl }
       { \scikg_write_jsonl: }
-      { \scikg_write_tsv: }
+      {
+        \str_if_eq:VnTF \g_scikg_format_tl { both }
+          {
+            \scikg_write_tsv:
+            \scikg_write_jsonl_to:N \g_scikg_jsonl_iow
+          }
+          { \scikg_write_tsv: }
+      }
   }
 
 % ============================================================
@@ -409,14 +420,24 @@
         \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.jsonl }
       }
       {
-        \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.tsv }
-        \iow_now:Nn \g_scikg_out_iow { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
+        \str_if_eq:VnTF \g_scikg_format_tl { both }
+          {
+            \iow_open:Nn \g_scikg_out_iow  { \jobname.scikg.tsv }
+            \iow_now:Nn  \g_scikg_out_iow  { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
+            \iow_open:Nn \g_scikg_jsonl_iow { \jobname.scikg.jsonl }
+          }
+          {
+            \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.tsv }
+            \iow_now:Nn  \g_scikg_out_iow { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
+          }
       }
   }
 
 \AtEndDocument
   {
     \iow_close:N \g_scikg_out_iow
+    \str_if_eq:VnT \g_scikg_format_tl { both }
+      { \iow_close:N \g_scikg_jsonl_iow }
   }
 
 \ExplSyntaxOff

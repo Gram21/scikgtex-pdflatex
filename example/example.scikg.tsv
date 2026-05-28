@@ -1,0 +1,4 @@
+nanchormodetypeidlabelpagetext
+1	scikg.1	inline	software	rrid:SCR_014198	viz-tool	1	Cytoscape
+2	scikg.2	inline	method	wikidata:Q113145171	ranking-method	1	PageRank
+3	scikg.3	silent	person	orcid:0000-0002-1825-0097	corr-author	1	Alice Smith

@@ -68,8 +68,7 @@ Use `\scikgsetup{...}` to define metadata and package options.
   license={...},
   anchors=true,
   silentanchors=false,
-  strict=false,
-  format=tsv
+  strict=false
 }
 ```
 
@@ -119,12 +118,13 @@ Controls the sidecar output format.
 
 Supported values:
 
-- `tsv` — recommended
-- `jsonl`
+- `both` — writes both TSV and JSONL sidecar files
+- `tsv` — writes only a TSV sidecar file
+- `jsonl` — writes only a JSONL sidecar file
 
 Default:
 
-- `tsv`
+- `both`
 
 ## 6. Main annotation command
 
@@ -282,16 +282,18 @@ These commands are shorthand for `\scikgannotate`.
 
 ## 10. Output files
 
-The package writes annotations to a sidecar file named from the TeX job name.
+The package writes annotations to sidecar files named from the TeX job name.
 
-Depending on `format`, the output is:
+By default (`format=both`), both files are written:
 
 - `\jobname.scikg.tsv`
-- or `\jobname.scikg.jsonl`
+- `\jobname.scikg.jsonl`
+
+Use `format=tsv` or `format=jsonl` to write only one of them.
 
 ## 11. TSV output
 
-TSV is the default and recommended format.
+Written by default and when `format=tsv` or `format=both` is set.
 
 Header:
 
@@ -308,7 +310,7 @@ Example:
 
 ## 12. JSONL output
 
-If `format=jsonl` is selected, each annotation is written as one JSON-like line.
+Written by default and when `format=jsonl` or `format=both` is set. Each annotation is written as one JSON-like line.
 
 Example:
 
@@ -366,8 +368,7 @@ A typical setup looks like this:
   license={CC-BY-4.0},
   anchors=true,
   silentanchors=true,
-  strict=false,
-  format=tsv
+  strict=false
 }
 
 \begin{document}
@@ -397,7 +398,7 @@ You can refer back to \scikgref{viz-tool}.
 
 For the most predictable results:
 
-- use `format=tsv`
+- leave `format` unset to get both TSV and JSONL output
 - keep labels unique
 - enable `strict=true` while developing
 - start from `example.tex`

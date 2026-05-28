@@ -16,7 +16,7 @@ The package supports two annotation modes:
 It also supports:
 
 - document-level PDF metadata
-- sidecar export in TSV or JSONL-like format
+- sidecar export in TSV and JSONL format (both by default), or one format exclusively
 - optional annotation anchors
 - references to labeled annotations with `\scikgref{...}`
 
@@ -29,7 +29,6 @@ It also supports:
   title={Example Paper},
   author={Jane Doe},
   doi={10.0000/example},
-  format=tsv,
   anchors=true
 }
 
@@ -50,15 +49,16 @@ This prints `Cytoscape` normally in the document and also writes an annotation r
 1. Put `scikgtex-pdflatex.sty` in your project directory.
 2. Look at `example.tex` for a working example.
 3. Compile with `pdflatex`.
-4. Check the generated sidecar file:
-   - `*.scikg.tsv` if `format=tsv`
-   - `*.scikg.jsonl` if `format=jsonl`
+4. Check the generated sidecar files:
+   - `*.scikg.tsv` and `*.scikg.jsonl` (default: both)
+   - `*.scikg.tsv` only if `format=tsv`
+   - `*.scikg.jsonl` only if `format=jsonl`
 
 ## Recommended usage
 
 If you are just starting out:
 
-- use `format=tsv`
+- leave `format` unset to get both TSV and JSONL
 - keep labels unique
 - begin from `example.tex`
 
