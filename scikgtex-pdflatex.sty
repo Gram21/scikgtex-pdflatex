@@ -1,373 +1,422 @@
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{scikgtex-pdflatex}[2026/05/28 Minimal SciKG-like metadata annotations for pdfLaTeX]
+\ProvidesExplPackage
+  {scikgtex-pdflatex}
+  {2026/05/28}
+  {0.8}
+  {Minimal SciKG-like metadata annotations for pdfLaTeX}
 
 \RequirePackage{hyperref}
 \RequirePackage{hyperxmp}
-\RequirePackage{keyval}
+\RequirePackage{xparse}
 
-\makeatletter
-
-% ============================================================
-% Document metadata and options
-% ============================================================
-
-\def\scikg@title{}
-\def\scikg@author{}
-\def\scikg@keywords{}
-\def\scikg@doi{}
-\def\scikg@license{}
-\def\scikg@format{tsv}
-
-\newif\ifscikg@anchors
-\newif\ifscikg@silentanchors
-\newif\ifscikg@strict
-\scikg@anchorsfalse
-\scikg@silentanchorsfalse
-\scikg@strictfalse
-
-\define@key{scikgsetup}{title}{\def\scikg@title{#1}}
-\define@key{scikgsetup}{author}{\def\scikg@author{#1}}
-\define@key{scikgsetup}{keywords}{\def\scikg@keywords{#1}}
-\define@key{scikgsetup}{doi}{\def\scikg@doi{#1}}
-\define@key{scikgsetup}{license}{\def\scikg@license{#1}}
-\define@key{scikgsetup}{format}{\def\scikg@format{#1}}
-
-\define@key{scikgsetup}{anchors}[true]{%
-  \edef\scikg@tmp{#1}%
-  \def\scikg@true{true}%
-  \ifx\scikg@tmp\scikg@true
-    \scikg@anchorstrue
-  \else
-    \scikg@anchorsfalse
-  \fi
-}
-
-\define@key{scikgsetup}{silentanchors}[true]{%
-  \edef\scikg@tmp{#1}%
-  \def\scikg@true{true}%
-  \ifx\scikg@tmp\scikg@true
-    \scikg@silentanchorstrue
-  \else
-    \scikg@silentanchorsfalse
-  \fi
-}
-
-\define@key{scikgsetup}{strict}[true]{%
-  \edef\scikg@tmp{#1}%
-  \def\scikg@true{true}%
-  \ifx\scikg@tmp\scikg@true
-    \scikg@stricttrue
-  \else
-    \scikg@strictfalse
-  \fi
-}
-
-\newcommand{\scikgsetup}[1]{%
-  \setkeys{scikgsetup}{#1}%
-}
-
-\AtBeginDocument{%
-  \hypersetup{%
-    pdftitle={\scikg@title},
-    pdfauthor={\scikg@author},
-    pdfkeywords={\scikg@keywords},
-    pdfsubject={DOI: \scikg@doi. License: \scikg@license}%
-  }%
-}
+\ExplSyntaxOn
 
 % ============================================================
-% Output file
+% Global configuration
 % ============================================================
 
-\newwrite\scikg@out
-\def\scikg@outfile{\jobname.scikg.tsv}
+\tl_new:N \g_scikg_title_tl
+\tl_new:N \g_scikg_author_tl
+\tl_new:N \g_scikg_keywords_tl
+\tl_new:N \g_scikg_doi_tl
+\tl_new:N \g_scikg_license_tl
+\tl_new:N \g_scikg_format_tl
+\tl_gset:Nn \g_scikg_format_tl { tsv }
 
-\newcommand{\scikg@selectoutfile}{%
-  \edef\scikg@tmpformat{\scikg@format}%
-  \def\scikg@jsonl{jsonl}%
-  \ifx\scikg@tmpformat\scikg@jsonl
-    \def\scikg@outfile{\jobname.scikg.jsonl}%
-  \else
-    \def\scikg@outfile{\jobname.scikg.tsv}%
-  \fi
-}
+\bool_new:N \g_scikg_anchors_bool
+\bool_new:N \g_scikg_silentanchors_bool
+\bool_new:N \g_scikg_strict_bool
 
-\AtBeginDocument{%
-  \scikg@selectoutfile
-  \immediate\openout\scikg@out=\scikg@outfile
-  \edef\scikg@tmpformat{\scikg@format}%
-  \def\scikg@tsv{tsv}%
-  \ifx\scikg@tmpformat\scikg@tsv
-    \immediate\write\scikg@out{n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext}%
-  \fi
-}
+\bool_gset_false:N \g_scikg_anchors_bool
+\bool_gset_false:N \g_scikg_silentanchors_bool
+\bool_gset_false:N \g_scikg_strict_bool
 
-\AtEndDocument{%
-  \immediate\closeout\scikg@out
-}
+\iow_new:N \g_scikg_out_iow
+\int_new:N \g_scikg_annotation_int
+
+\prop_new:N \g_scikg_label_anchor_prop
+\prop_new:N \g_scikg_label_text_prop
 
 % ============================================================
-% Annotation state
+% Local annotation state
 % ============================================================
 
-\newif\ifscikg@inline
-\newif\ifscikg@haslabel
+\tl_new:N \l_scikg_mode_tl
+\tl_new:N \l_scikg_type_tl
+\tl_new:N \l_scikg_id_tl
+\tl_new:N \l_scikg_label_tl
+\tl_new:N \l_scikg_text_tl
+\tl_new:N \l_scikg_anchor_tl
+\tl_new:N \l_scikg_page_tl
 
-\def\scikg@ann@type{}
-\def\scikg@ann@id{}
-\def\scikg@ann@label{}
-\def\scikg@ann@text{}
-\def\scikg@ann@anchor{}
-\newcount\scikg@anncount
-\scikg@anncount=0
+\bool_new:N \l_scikg_inline_bool
+\bool_new:N \l_scikg_has_label_bool
 
-\newcommand{\scikg@resetann}{%
-  \scikg@inlinetrue
-  \scikg@haslabelfalse
-  \def\scikg@ann@type{}%
-  \def\scikg@ann@id{}%
-  \def\scikg@ann@label{}%
-  \def\scikg@ann@text{}%
-  \def\scikg@ann@anchor{}%
-}
-
-\define@key{scikgann}{mode}[inline]{%
-  \edef\scikg@tmp{#1}%
-  \def\scikg@silent{silent}%
-  \ifx\scikg@tmp\scikg@silent
-    \scikg@inlinefalse
-  \else
-    \scikg@inlinetrue
-  \fi
-}
-\define@key{scikgann}{type}{\def\scikg@ann@type{#1}}
-\define@key{scikgann}{id}{\def\scikg@ann@id{#1}}
-\define@key{scikgann}{label}{%
-  \def\scikg@ann@label{#1}%
-  \scikg@haslabeltrue
-}
+% Sanitized scratch
+\tl_new:N \l_scikg_s_anchor_tl
+\tl_new:N \l_scikg_s_type_tl
+\tl_new:N \l_scikg_s_id_tl
+\tl_new:N \l_scikg_s_label_tl
+\tl_new:N \l_scikg_s_text_tl
+\tl_new:N \l_scikg_s_page_tl
 
 % ============================================================
-% Diagnostics
+% Messages
 % ============================================================
 
-\newcommand{\scikg@warn}[1]{%
-  \PackageWarning{scikgtex-pdflatex}{#1}%
-}
+\msg_new:nnn { scikg } { missing-type }
+  { Annotation~#1~is~missing~required~key~`type'. }
 
-\newcommand{\scikg@error}[1]{%
-  \PackageError{scikgtex-pdflatex}{#1}{Disable strict=true or fix the annotation input.}%
-}
+\msg_new:nnn { scikg } { missing-id }
+  { Annotation~#1~is~missing~required~key~`id'. }
 
-\newcommand{\scikg@issue}[1]{%
-  \ifscikg@strict
-    \scikg@error{#1}%
-  \else
-    \scikg@warn{#1}%
-  \fi
-}
+\msg_new:nnn { scikg } { empty-text }
+  { Annotation~#1~has~empty~text~argument. }
 
-\newcommand{\scikg@validateannotation}{%
-  \ifx\scikg@ann@type\@empty
-    \scikg@issue{Annotation \the\scikg@anncount\space missing required key `type'}%
-  \fi
-  \ifx\scikg@ann@id\@empty
-    \scikg@issue{Annotation \the\scikg@anncount\space missing required key `id'}%
-  \fi
-  \ifx\scikg@ann@text\@empty
-    \scikg@issue{Annotation \the\scikg@anncount\space has empty text argument}%
-  \fi
-}
+\msg_new:nnn { scikg } { duplicate-label }
+  { Duplicate~annotation~label~`#1'. }
+
+\msg_new:nnn { scikg } { undefined-label }
+  { Undefined~annotation~label~`#1'. }
 
 % ============================================================
-% Label registration and referencing
+% Utility
 % ============================================================
 
-\newcommand{\scikg@registerlabel}{%
-  \ifscikg@haslabel
-    \@ifundefined{scikg@label@\scikg@ann@label}{%
-      \expandafter\xdef\csname scikg@label@\scikg@ann@label\endcsname{\scikg@ann@anchor}%
-      \expandafter\xdef\csname scikg@labeltext@\scikg@ann@label\endcsname{\scikg@ann@text}%
-    }{%
-      \scikg@issue{Duplicate annotation label `\scikg@ann@label'}%
-    }%
-  \fi
-}
+\prg_new_conditional:Npnn \scikg_if_value_true:n #1 { TF }
+  {
+    \str_if_eq:eeTF { \tl_trim_spaces:n {#1} } { true }
+      { \prg_return_true: }
+      { \prg_return_false: }
+  }
 
-\newcommand{\scikgref}[1]{%
-  \@ifundefined{scikg@label@#1}{%
-    \PackageWarning{scikgtex-pdflatex}{Undefined annotation label `#1'}%
-    ??%
-  }{%
-    \hyperlink{\csname scikg@label@#1\endcsname}{%
-      \@ifundefined{scikg@labeltext@#1}{#1}{\csname scikg@labeltext@#1\endcsname}%
-    }%
-  }%
-}
+\cs_new_protected:Npn \scikg_bool_gset_from_string:Nn #1#2
+  {
+    \scikg_if_value_true:nTF {#2}
+      { \bool_gset_true:N #1 }
+      { \bool_gset_false:N #1 }
+  }
 
-% ============================================================
-% Anchor handling
-% ============================================================
+\cs_new_protected:Npn \scikg_warn_or_error:nn #1#2
+  {
+    \bool_if:NTF \g_scikg_strict_bool
+      { \msg_error:nnn   { scikg } {#1} {#2} }
+      { \msg_warning:nnn { scikg } {#1} {#2} }
+  }
 
-\newcommand{\scikg@makeanchorname}{%
-  \edef\scikg@ann@anchor{scikg.\the\scikg@anncount}%
-}
-
-\newcommand{\scikg@placeanchor}{%
-  \Hy@raisedlink{%
-    \hyper@anchorstart{\scikg@ann@anchor}\hyper@anchorend
-  }%
-}
-
-\newcommand{\scikg@maybeanchor}{%
-  \ifscikg@inline
-    \ifscikg@anchors
-      \scikg@placeanchor
-    \fi
-  \else
-    \ifscikg@silentanchors
-      \scikg@placeanchor
-    \fi
-  \fi
-}
+% Conservative stringification.
+\cs_new_protected:Npn \scikg_sanitize_to_str:nN #1#2
+  {
+    \tl_set:Nx #2 { \tl_to_str:n {#1} }
+  }
 
 % ============================================================
-% Sanitization helpers
+% Setup keys
 % ============================================================
 
-% Prototype-level sanitization only.
-% Goal: reduce obvious output breakage for common cases.
+\keys_define:nn { scikg / setup }
+  {
+    title          .tl_gset:N = \g_scikg_title_tl,
+    author         .tl_gset:N = \g_scikg_author_tl,
+    keywords       .tl_gset:N = \g_scikg_keywords_tl,
+    doi            .tl_gset:N = \g_scikg_doi_tl,
+    license        .tl_gset:N = \g_scikg_license_tl,
+    format         .tl_gset:N = \g_scikg_format_tl,
 
-\newcommand{\scikg@sanitize@common}[1]{%
-  \begingroup
-  \edef\scikg@tmpa{\detokenize{#1}}%
-  \xdef\scikg@sanitized{\scikg@tmpa}%
-  \endgroup
-}
+    anchors        .code:n    = { \scikg_bool_gset_from_string:Nn \g_scikg_anchors_bool {#1} },
+    anchors        .default:n = true,
 
-% For TSV we rely on detokenize as a coarse stabilization layer.
-\newcommand{\scikg@sanitize@tsv}[1]{%
-  \scikg@sanitize@common{#1}%
-}
+    silentanchors  .code:n    = { \scikg_bool_gset_from_string:Nn \g_scikg_silentanchors_bool {#1} },
+    silentanchors  .default:n = true,
 
-% For JSONL-like output we also use detokenize.
-% This is not fully JSON-safe, but is safer than raw expansion.
-\newcommand{\scikg@sanitize@json}[1]{%
-  \scikg@sanitize@common{#1}%
-}
+    strict         .code:n    = { \scikg_bool_gset_from_string:Nn \g_scikg_strict_bool {#1} },
+    strict         .default:n = true,
+  }
+
+\NewDocumentCommand \scikgsetup { m }
+  {
+    \keys_set:nn { scikg / setup } {#1}
+  }
+
+% ============================================================
+% Annotation keys
+% ============================================================
+
+\keys_define:nn { scikg / ann }
+  {
+    mode .choice:,
+    mode / inline .code:n =
+      {
+        \tl_set:Nn \l_scikg_mode_tl { inline }
+        \bool_set_true:N \l_scikg_inline_bool
+      },
+    mode / silent .code:n =
+      {
+        \tl_set:Nn \l_scikg_mode_tl { silent }
+        \bool_set_false:N \l_scikg_inline_bool
+      },
+    mode .initial:n = inline,
+
+    type  .tl_set:N = \l_scikg_type_tl,
+    id    .tl_set:N = \l_scikg_id_tl,
+    label .code:n   =
+      {
+        \tl_set:Nn \l_scikg_label_tl {#1}
+        \bool_set_true:N \l_scikg_has_label_bool
+      },
+  }
+
+\cs_new_protected:Npn \scikg_annotation_reset:
+  {
+    \tl_set:Nn \l_scikg_mode_tl { inline }
+    \tl_clear:N \l_scikg_type_tl
+    \tl_clear:N \l_scikg_id_tl
+    \tl_clear:N \l_scikg_label_tl
+    \tl_clear:N \l_scikg_text_tl
+    \tl_clear:N \l_scikg_anchor_tl
+    \tl_clear:N \l_scikg_page_tl
+    \bool_set_true:N \l_scikg_inline_bool
+    \bool_set_false:N \l_scikg_has_label_bool
+  }
+
+% ============================================================
+% Validation
+% ============================================================
+
+\cs_new_protected:Npn \scikg_validate_annotation:
+  {
+    \tl_if_blank:VTF \l_scikg_type_tl
+      {
+        \scikg_warn_or_error:nn { missing-type }
+          { \int_use:N \g_scikg_annotation_int }
+      }
+      { }
+
+    \tl_if_blank:VTF \l_scikg_id_tl
+      {
+        \scikg_warn_or_error:nn { missing-id }
+          { \int_use:N \g_scikg_annotation_int }
+      }
+      { }
+
+    \tl_if_blank:VTF \l_scikg_text_tl
+      {
+        \scikg_warn_or_error:nn { empty-text }
+          { \int_use:N \g_scikg_annotation_int }
+      }
+      { }
+  }
+
+% ============================================================
+% Labels and references
+% ============================================================
+
+\cs_new_protected:Npn \scikg_register_label:
+  {
+    \bool_if:NT \l_scikg_has_label_bool
+      {
+        \prop_if_in:NVTF \g_scikg_label_anchor_prop \l_scikg_label_tl
+          {
+            \scikg_warn_or_error:nn { duplicate-label } { \l_scikg_label_tl }
+          }
+          {
+            \prop_gput:NVV \g_scikg_label_anchor_prop \l_scikg_label_tl \l_scikg_anchor_tl
+            \prop_gput:NVV \g_scikg_label_text_prop   \l_scikg_label_tl \l_scikg_text_tl
+          }
+      }
+  }
+
+\NewDocumentCommand \scikgref { m }
+  {
+    \prop_if_in:NnTF \g_scikg_label_anchor_prop {#1}
+      {
+        \prop_get:NnN \g_scikg_label_anchor_prop {#1} \l_tmpa_tl
+        \prop_get:NnN \g_scikg_label_text_prop   {#1} \l_tmpb_tl
+        \hyperlink{\l_tmpa_tl}
+          {
+            \tl_if_blank:VTF \l_tmpb_tl
+              {#1}
+              { \l_tmpb_tl }
+          }
+      }
+      {
+        \msg_warning:nnn { scikg } { undefined-label } {#1}
+        ??
+      }
+  }
+
+% ============================================================
+% Anchors
+% ============================================================
+
+\cs_new_protected:Npn \scikg_make_anchor_name:
+  {
+    \tl_set:Nx \l_scikg_anchor_tl { scikg.\int_use:N \g_scikg_annotation_int }
+  }
+
+\cs_new_protected:Npn \scikg_place_anchor:
+  {
+    \Hy@raisedlink
+      {
+        \hyper@anchorstart{\l_scikg_anchor_tl}
+        \hyper@anchorend
+      }
+  }
+
+\cs_new_protected:Npn \scikg_maybe_place_anchor:
+  {
+    \bool_if:NTF \l_scikg_inline_bool
+      {
+        \bool_if:NT \g_scikg_anchors_bool
+          { \scikg_place_anchor: }
+      }
+      {
+        \bool_if:NT \g_scikg_silentanchors_bool
+          { \scikg_place_anchor: }
+      }
+  }
 
 % ============================================================
 % Output helpers
 % ============================================================
 
-\newcommand{\scikg@modevalue}{%
-  \ifscikg@inline inline\else silent\fi
-}
+\cs_new:Npn \scikg_mode_value:
+  {
+    \bool_if:NTF \l_scikg_inline_bool { inline } { silent }
+  }
 
-\newcommand{\scikg@writejsonl}{%
-  \begingroup
-    \scikg@sanitize@json{\scikg@ann@anchor}%
-    \let\scikg@jsonanchor\scikg@sanitized
-    \scikg@sanitize@json{\scikg@ann@type}%
-    \let\scikg@jsontype\scikg@sanitized
-    \scikg@sanitize@json{\scikg@ann@id}%
-    \let\scikg@jsonid\scikg@sanitized
-    \scikg@sanitize@json{\scikg@ann@label}%
-    \let\scikg@jsonlabel\scikg@sanitized
-    \scikg@sanitize@json{\scikg@ann@text}%
-    \let\scikg@jsontext\scikg@sanitized
-    \edef\scikg@line{%
-      {"n":"\the\scikg@anncount","anchor":"\scikg@jsonanchor","mode":"\scikg@modevalue","type":"\scikg@jsontype","id":"\scikg@jsonid","label":"\scikg@jsonlabel","page":"\thepage","text":"\scikg@jsontext"}%
-    }%
-    \immediate\write\scikg@out{\scikg@line}%
-  \endgroup
-}
+\cs_new_protected:Npn \scikg_capture_page:
+  {
+    \tl_set:Nx \l_scikg_page_tl { \thepage }
+  }
 
-\newcommand{\scikg@writetsv}{%
-  \begingroup
-    \scikg@sanitize@tsv{\scikg@ann@anchor}%
-    \let\scikg@tsvanchor\scikg@sanitized
-    \scikg@sanitize@tsv{\scikg@ann@type}%
-    \let\scikg@tsvtype\scikg@sanitized
-    \scikg@sanitize@tsv{\scikg@ann@id}%
-    \let\scikg@tsvid\scikg@sanitized
-    \scikg@sanitize@tsv{\scikg@ann@label}%
-    \let\scikg@tsvlabel\scikg@sanitized
-    \scikg@sanitize@tsv{\scikg@ann@text}%
-    \let\scikg@tsvtext\scikg@sanitized
-    \immediate\write\scikg@out{%
-      \the\scikg@anncount^^I%
-      \scikg@tsvanchor^^I%
-      \scikg@modevalue^^I%
-      \scikg@tsvtype^^I%
-      \scikg@tsvid^^I%
-      \scikg@tsvlabel^^I%
-      \thepage^^I%
-      \scikg@tsvtext%
-    }%
-  \endgroup
-}
+\cs_new_protected:Npn \scikg_prepare_sanitized_fields:
+  {
+    \scikg_sanitize_to_str:nN { \l_scikg_anchor_tl } \l_scikg_s_anchor_tl
+    \scikg_sanitize_to_str:nN { \l_scikg_type_tl }   \l_scikg_s_type_tl
+    \scikg_sanitize_to_str:nN { \l_scikg_id_tl }     \l_scikg_s_id_tl
+    \scikg_sanitize_to_str:nN { \l_scikg_label_tl }  \l_scikg_s_label_tl
+    \scikg_sanitize_to_str:nN { \l_scikg_text_tl }   \l_scikg_s_text_tl
+    \scikg_sanitize_to_str:nN { \l_scikg_page_tl }   \l_scikg_s_page_tl
+  }
 
-\newcommand{\scikg@writeannotation}{%
-  \edef\scikg@tmpformat{\scikg@format}%
-  \def\scikg@jsonl{jsonl}%
-  \ifx\scikg@tmpformat\scikg@jsonl
-    \scikg@writejsonl
-  \else
-    \scikg@writetsv
-  \fi
-}
+\cs_new_protected:Npn \scikg_write_tsv:
+  {
+    \scikg_prepare_sanitized_fields:
+    \iow_now:Nx \g_scikg_out_iow
+      {
+        \int_use:N \g_scikg_annotation_int \c_tab_token
+        \l_scikg_s_anchor_tl \c_tab_token
+        \scikg_mode_value: \c_tab_token
+        \l_scikg_s_type_tl \c_tab_token
+        \l_scikg_s_id_tl \c_tab_token
+        \l_scikg_s_label_tl \c_tab_token
+        \l_scikg_s_page_tl \c_tab_token
+        \l_scikg_s_text_tl
+      }
+  }
+
+\cs_new_protected:Npn \scikg_write_jsonl:
+  {
+    \scikg_prepare_sanitized_fields:
+    \iow_now:Nx \g_scikg_out_iow
+      {
+        \c_left_brace_str
+        "n":"\int_use:N \g_scikg_annotation_int",
+        "anchor":"\l_scikg_s_anchor_tl",
+        "mode":"\scikg_mode_value:",
+        "type":"\l_scikg_s_type_tl",
+        "id":"\l_scikg_s_id_tl",
+        "label":"\l_scikg_s_label_tl",
+        "page":"\l_scikg_s_page_tl",
+        "text":"\l_scikg_s_text_tl"
+        \c_right_brace_str
+      }
+  }
+
+\cs_new_protected:Npn \scikg_write_annotation:
+  {
+    \str_if_eq:VnTF \g_scikg_format_tl { jsonl }
+      { \scikg_write_jsonl: }
+      { \scikg_write_tsv: }
+  }
 
 % ============================================================
-% Public command
+% Main annotation command
 % ============================================================
 
-\newcommand{\scikgannotate}[2][]{%
-  \scikg@resetann
-  \setkeys{scikgann}{#1}%
-  \def\scikg@ann@text{#2}%
-  \global\advance\scikg@anncount by 1\relax
-  \scikg@makeanchorname
-  \scikg@validateannotation
-  \scikg@registerlabel
-  \scikg@maybeanchor
-  \ifscikg@inline
-    \scikg@ann@text
-  \fi
-  \scikg@writeannotation
-}
+\NewDocumentCommand \scikgannotate { O{} m }
+  {
+    \scikg_annotation_reset:
+    \keys_set:nn { scikg / ann } {#1}
+    \tl_set:Nn \l_scikg_text_tl {#2}
+    \int_gincr:N \g_scikg_annotation_int
+    \scikg_make_anchor_name:
+    \scikg_capture_page:
+    \scikg_validate_annotation:
+    \scikg_register_label:
+    \scikg_maybe_place_anchor:
+    \bool_if:NT \l_scikg_inline_bool
+      { \l_scikg_text_tl }
+    \scikg_write_annotation:
+  }
 
 % ============================================================
 % Convenience wrappers
 % ============================================================
 
-\newcommand{\scikgsoftware}[2]{%
-  \scikgannotate[mode=inline,type=software,id={#1}]{#2}%
-}
-\newcommand{\scikgsoftwaresilent}[2]{%
-  \scikgannotate[mode=silent,type=software,id={#1}]{#2}%
-}
+\NewDocumentCommand \scikgsoftware { m m }
+  { \scikgannotate[mode=inline,type=software,id={#1}]{#2} }
 
-\newcommand{\scikgperson}[2]{%
-  \scikgannotate[mode=inline,type=person,id={#1}]{#2}%
-}
-\newcommand{\scikgpersonsilent}[2]{%
-  \scikgannotate[mode=silent,type=person,id={#1}]{#2}%
-}
+\NewDocumentCommand \scikgsoftwaresilent { m m }
+  { \scikgannotate[mode=silent,type=software,id={#1}]{#2} }
 
-\newcommand{\scikgdataset}[2]{%
-  \scikgannotate[mode=inline,type=dataset,id={#1}]{#2}%
-}
-\newcommand{\scikgdatasetsilent}[2]{%
-  \scikgannotate[mode=silent,type=dataset,id={#1}]{#2}%
-}
+\NewDocumentCommand \scikgperson { m m }
+  { \scikgannotate[mode=inline,type=person,id={#1}]{#2} }
 
-\newcommand{\scikgmethod}[2]{%
-  \scikgannotate[mode=inline,type=method,id={#1}]{#2}%
-}
-\newcommand{\scikgmethodsilent}[2]{%
-  \scikgannotate[mode=silent,type=method,id={#1}]{#2}%
-}
+\NewDocumentCommand \scikgpersonsilent { m m }
+  { \scikgannotate[mode=silent,type=person,id={#1}]{#2} }
 
-\makeatother
+\NewDocumentCommand \scikgdataset { m m }
+  { \scikgannotate[mode=inline,type=dataset,id={#1}]{#2} }
+
+\NewDocumentCommand \scikgdatasetsilent { m m }
+  { \scikgannotate[mode=silent,type=dataset,id={#1}]{#2} }
+
+\NewDocumentCommand \scikgmethod { m m }
+  { \scikgannotate[mode=inline,type=method,id={#1}]{#2} }
+
+\NewDocumentCommand \scikgmethodsilent { m m }
+  { \scikgannotate[mode=silent,type=method,id={#1}]{#2} }
+
+% ============================================================
+% Begin/end document hooks
+% ============================================================
+
+\AtBeginDocument
+  {
+    \hypersetup
+      {
+        pdftitle    = {\g_scikg_title_tl},
+        pdfauthor   = {\g_scikg_author_tl},
+        pdfkeywords = {\g_scikg_keywords_tl},
+        pdfsubject  = {DOI:~\g_scikg_doi_tl.~License:~\g_scikg_license_tl}
+      }
+
+    \str_if_eq:VnTF \g_scikg_format_tl { jsonl }
+      {
+        \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.jsonl }
+      }
+      {
+        \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.tsv }
+        \iow_now:Nn \g_scikg_out_iow { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
+      }
+  }
+
+\AtEndDocument
+  {
+    \iow_close:N \g_scikg_out_iow
+  }
+
+\ExplSyntaxOff
 \endinput

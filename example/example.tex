@@ -7,15 +7,18 @@
 \usepackage{scikgtex-pdflatex}
 
 \scikgsetup{
-  title={A Minimal SciKG-like Prototype for pdfLaTeX},
+  title={A Minimal SciKG-like Prototype for pdfLaTeX v8},
   author={Gram21},
   keywords={semantic publishing, metadata, latex, pdfLaTeX},
   doi={10.0000/example-doi},
   license={CC-BY-4.0},
-  anchors=true
+  anchors=true,
+  silentanchors=true,
+  strict=false,
+  format=tsv
 }
 
-\title{A Minimal SciKG-like Prototype for pdfLaTeX}
+\title{A Minimal SciKG-like Prototype for pdfLaTeX v8}
 \author{Gram21}
 \date{}
 
@@ -23,16 +26,30 @@
 \maketitle
 
 This paper uses
-\scikgannotate[mode=inline,type=software,id={rrid:SCR_014198},label={viz-tool}]{Cytoscape}
+\scikgannotate[
+  mode=inline,
+  type=software,
+  id={rrid:SCR_014198},
+  label={viz-tool}
+]{Cytoscape}
 for visualization.
 
 We apply
-\scikgannotate[mode=inline,type=method,id={wikidata:Q113145171}]{PageRank}
+\scikgannotate[
+  mode=inline,
+  type=method,
+  id={wikidata:Q113145171},
+  label={ranking-method}
+]{PageRank}
 to rank entities.
 
-We record a silent contributor annotation:
-\scikgannotate[mode=silent,type=person,id={orcid:0000-0002-1825-0097},label={corresponding-author}]{Alice Smith}
+\scikgannotate[
+  mode=silent,
+  type=person,
+  id={orcid:0000-0002-1825-0097},
+  label={corr-author}
+]{Alice Smith}
 
-Only inline annotations appear in the PDF text.
+You can refer back to \scikgref{viz-tool} and \scikgref{ranking-method}.
 
 \end{document}
