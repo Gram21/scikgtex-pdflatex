@@ -1,61 +1,56 @@
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{scikgtex-pdflatex}[2026/05/28 Minimal SciKG-like metadata annotations for pdfLaTeX]
 
-\RequirePackage{ifpdf}
 \RequirePackage{hyperref}
 \RequirePackage{hyperxmp}
+\RequirePackage{keyval}
 
-% ----------------------------
-% Stored document metadata
-% ----------------------------
+\makeatletter
+
+% ============================================================
+% Document metadata
+% ============================================================
+
 \def\scikg@title{}
 \def\scikg@author{}
 \def\scikg@keywords{}
 \def\scikg@doi{}
 \def\scikg@license{}
+\newif\ifscikg@anchors
+\scikg@anchorsfalse
 
-% Simple key setup interface
-\newcommand{\scikgsetup}[1]{\scikg@parsekeys#1,\@nil}
-
-\def\scikg@parsekeys#1,#2\@nil{%
-  \ifx\relax#1\relax
+\define@key{scikgsetup}{title}{\def\scikg@title{#1}}
+\define@key{scikgsetup}{author}{\def\scikg@author{#1}}
+\define@key{scikgsetup}{keywords}{\def\scikg@keywords{#1}}
+\define@key{scikgsetup}{doi}{\def\scikg@doi{#1}}
+\define@key{scikgsetup}{license}{\def\scikg@license{#1}}
+\define@key{scikgsetup}{anchors}[true]{%
+  \edef\scikg@tmp{#1}%
+  \def\scikg@true{true}%
+  \ifx\scikg@tmp\scikg@true
+    \scikg@anchorstrue
   \else
-    \scikg@assign#1==\@nil
-    \scikg@parsekeys#2\@nil
+    \scikg@anchorsfalse
   \fi
 }
 
-\def\scikg@assign#1=#2=#3\@nil{%
-  \def\scikg@key{#1}%
-  \def\scikg@val{#2}%
-  \expandafter\ifx\csname scikg@set@\scikg@key\endcsname\relax
-    % ignore unknown keys
-  \else
-    \csname scikg@set@\scikg@key\endcsname{\scikg@val}%
-  \fi
+\newcommand{\scikgsetup}[1]{%
+  \setkeys{scikgsetup}{#1}%
 }
 
-\def\scikg@set@title#1{\def\scikg@title{#1}}
-\def\scikg@set@author#1{\def\scikg@author{#1}}
-\def\scikg@set@keywords#1{\def\scikg@keywords{#1}}
-\def\scikg@set@doi#1{\def\scikg@doi{#1}}
-\def\scikg@set@license#1{\def\scikg@license{#1}}
-
-% ----------------------------
-% PDF metadata hookup
-% ----------------------------
 \AtBeginDocument{%
   \hypersetup{%
     pdftitle={\scikg@title},
     pdfauthor={\scikg@author},
     pdfkeywords={\scikg@keywords},
-    pdfsubject={DOI: \scikg@doi\space License: \scikg@license}%
+    pdfsubject={DOI: \scikg@doi. License: \scikg@license}%
   }%
 }
 
-% ----------------------------
-% Sidecar annotation output
-% ----------------------------
+% ============================================================
+% Output file
+% ============================================================
+
 \newwrite\scikg@out
 
 \AtBeginDocument{%
@@ -66,33 +61,123 @@
   \immediate\closeout\scikg@out
 }
 
-% Fallback page number string
-\newcommand{\scikg@pagevalue}{\thepage}
+% ============================================================
+% Annotation state
+% ============================================================
 
-% ----------------------------
-% Minimal inline annotation
-% Syntax:
-%   \scikgannotate{<type>}{<id>}{<visible text>}
-%
-% Prints visible text normally.
-% Also writes one JSON-like line to sidecar.
-% ----------------------------
-\newcommand{\scikgannotate}[3]{%
-  #3%
+\newif\ifscikg@inline
+\newif\ifscikg@haslabel
+
+\def\scikg@ann@type{}
+\def\scikg@ann@id{}
+\def\scikg@ann@label{}
+\def\scikg@ann@text{}
+\newcount\scikg@anncount
+\scikg@anncount=0
+
+\newcommand{\scikg@resetann}{%
+  \scikg@inlinetrue
+  \scikg@haslabelfalse
+  \def\scikg@ann@type{}%
+  \def\scikg@ann@id{}%
+  \def\scikg@ann@label{}%
+  \def\scikg@ann@text{}%
+}
+
+\define@key{scikgann}{mode}[inline]{%
+  \edef\scikg@tmp{#1}%
+  \def\scikg@silent{silent}%
+  \ifx\scikg@tmp\scikg@silent
+    \scikg@inlinefalse
+  \else
+    \scikg@inlinetrue
+  \fi
+}
+\define@key{scikgann}{type}{\def\scikg@ann@type{#1}}
+\define@key{scikgann}{id}{\def\scikg@ann@id{#1}}
+\define@key{scikgann}{label}{%
+  \def\scikg@ann@label{#1}%
+  \scikg@haslabeltrue
+}
+
+% ============================================================
+% Invisible anchor for inline annotations
+% ============================================================
+
+\newcommand{\scikg@maybeanchor}{%
+  \ifscikg@anchors
+    \Hy@raisedlink{%
+      \hyper@anchorstart{scikg.\the\scikg@anncount}\hyper@anchorend
+    }%
+  \fi
+}
+
+% ============================================================
+% Internal writer
+% ============================================================
+
+\newcommand{\scikg@writeannotation}{%
   \begingroup
+    \edef\scikg@modevalue{%
+      \ifscikg@inline inline\else silent\fi
+    }%
+    \edef\scikg@labelvalue{%
+      \ifscikg@haslabel \scikg@ann@label\else \empty\fi
+    }%
     \edef\scikg@line{%
-      {"type":"#1","id":"#2","text":"#3","page":"\scikg@pagevalue"}%
+      {"n":"\the\scikg@anncount","mode":"\scikg@modevalue","type":"\scikg@ann@type","id":"\scikg@ann@id","label":"\scikg@labelvalue","text":"\scikg@ann@text","page":"\thepage"}%
     }%
     \immediate\write\scikg@out{\scikg@line}%
   \endgroup
 }
 
-% ----------------------------
-% Convenience wrappers
-% ----------------------------
-\newcommand{\scikgperson}[2]{\scikgannotate{person}{#1}{#2}}
-\newcommand{\scikgsoftware}[2]{\scikgannotate{software}{#1}{#2}}
-\newcommand{\scikgdataset}[2]{\scikgannotate{dataset}{#1}{#2}}
-\newcommand{\scikgmethod}[2]{\scikgannotate{method}{#1}{#2}}
+% ============================================================
+% Public command
+% ============================================================
 
+\newcommand{\scikgannotate}[2][]{%
+  \scikg@resetann
+  \setkeys{scikgann}{#1}%
+  \def\scikg@ann@text{#2}%
+  \global\advance\scikg@anncount by 1\relax
+  \ifscikg@inline
+    \scikg@maybeanchor
+    \scikg@ann@text
+  \fi
+  \scikg@writeannotation
+}
+
+% ============================================================
+% Convenience wrappers
+% ============================================================
+
+\newcommand{\scikgsoftware}[2]{%
+  \scikgannotate[mode=inline,type=software,id={#1}]{#2}%
+}
+\newcommand{\scikgsoftwaresilent}[2]{%
+  \scikgannotate[mode=silent,type=software,id={#1}]{#2}%
+}
+
+\newcommand{\scikgperson}[2]{%
+  \scikgannotate[mode=inline,type=person,id={#1}]{#2}%
+}
+\newcommand{\scikgpersonsilent}[2]{%
+  \scikgannotate[mode=silent,type=person,id={#1}]{#2}%
+}
+
+\newcommand{\scikgdataset}[2]{%
+  \scikgannotate[mode=inline,type=dataset,id={#1}]{#2}%
+}
+\newcommand{\scikgdatasetsilent}[2]{%
+  \scikgannotate[mode=silent,type=dataset,id={#1}]{#2}%
+}
+
+\newcommand{\scikgmethod}[2]{%
+  \scikgannotate[mode=inline,type=method,id={#1}]{#2}%
+}
+\newcommand{\scikgmethodsilent}[2]{%
+  \scikgannotate[mode=silent,type=method,id={#1}]{#2}%
+}
+
+\makeatother
 \endinput
