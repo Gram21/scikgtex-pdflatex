@@ -104,10 +104,11 @@
       { \msg_warning:nnn { scikg } {#1} {#2} }
   }
 
-% Conservative stringification.
-\cs_new_protected:Npn \scikg_sanitize_to_str:nN #1#2
+% Conservative stringification (copy value, detokenize for safe file output).
+\cs_new_protected:Npn \scikg_sanitize_to_str:NN #1#2
   {
-    \tl_set:Nx #2 { \tl_to_str:n {#1} }
+    \tl_set:NV #2 #1
+    \tl_set:Nx #2 { \tl_to_str:n { \tl_use:N #2 } }
   }
 
 % ============================================================
@@ -292,12 +293,12 @@
 
 \cs_new_protected:Npn \scikg_prepare_sanitized_fields:
   {
-    \scikg_sanitize_to_str:nN { \l_scikg_anchor_tl } \l_scikg_s_anchor_tl
-    \scikg_sanitize_to_str:nN { \l_scikg_type_tl }   \l_scikg_s_type_tl
-    \scikg_sanitize_to_str:nN { \l_scikg_id_tl }     \l_scikg_s_id_tl
-    \scikg_sanitize_to_str:nN { \l_scikg_label_tl }  \l_scikg_s_label_tl
-    \scikg_sanitize_to_str:nN { \l_scikg_text_tl }   \l_scikg_s_text_tl
-    \scikg_sanitize_to_str:nN { \l_scikg_page_tl }   \l_scikg_s_page_tl
+    \tl_set:NV \l_scikg_s_anchor_tl \l_scikg_anchor_tl
+    \tl_set:NV \l_scikg_s_type_tl   \l_scikg_type_tl
+    \tl_set:NV \l_scikg_s_id_tl     \l_scikg_id_tl
+    \tl_set:NV \l_scikg_s_label_tl  \l_scikg_label_tl
+    \tl_set:NV \l_scikg_s_text_tl   \l_scikg_text_tl
+    \tl_set:NV \l_scikg_s_page_tl   \l_scikg_page_tl
   }
 
 \cs_new_protected:Npn \scikg_write_tsv:
@@ -305,13 +306,13 @@
     \scikg_prepare_sanitized_fields:
     \iow_now:Nx \g_scikg_out_iow
       {
-        \int_use:N \g_scikg_annotation_int \c_tab_token
-        \l_scikg_s_anchor_tl \c_tab_token
-        \scikg_mode_value: \c_tab_token
-        \l_scikg_s_type_tl \c_tab_token
-        \l_scikg_s_id_tl \c_tab_token
-        \l_scikg_s_label_tl \c_tab_token
-        \l_scikg_s_page_tl \c_tab_token
+        \int_use:N \g_scikg_annotation_int \iow_char:N \^^I
+        \l_scikg_s_anchor_tl \iow_char:N \^^I
+        \scikg_mode_value: \iow_char:N \^^I
+        \l_scikg_s_type_tl \iow_char:N \^^I
+        \l_scikg_s_id_tl \iow_char:N \^^I
+        \l_scikg_s_label_tl \iow_char:N \^^I
+        \l_scikg_s_page_tl \iow_char:N \^^I
         \l_scikg_s_text_tl
       }
   }
