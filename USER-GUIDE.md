@@ -50,6 +50,7 @@ A normal workflow is:
 3. annotate content with `\scikgannotate`
 4. compile with `pdflatex`
 5. inspect the generated sidecar file
+6. optionally inspect the PDF attachment list for the embedded JSONL and TSV annotation exports
 
 A full example is available in `example.tex`.
 
@@ -125,6 +126,10 @@ Supported values:
 Default:
 
 - `both`
+
+Regardless of the selected sidecar format, the package also embeds both a JSONL export and a TSV export into the generated PDF as attached files.
+The embedded attachments use the visible names `\jobname.scikg.jsonl` and `\jobname.scikg.tsv`, with descriptive attachment metadata for PDF viewers.
+When a sidecar format is not otherwise written to disk, the package creates an internal `*.scikg.embed.jsonl` or `*.scikg.embed.tsv` file to supply the embedded attachment.
 
 ## 6. Main annotation command
 

@@ -33,10 +33,17 @@
 
 \iow_new:N \g_scikg_out_iow
 \iow_new:N \g_scikg_jsonl_iow
+\iow_new:N \g_scikg_embed_jsonl_iow
+\iow_new:N \g_scikg_embed_tsv_iow
 \int_new:N \g_scikg_annotation_int
 
 \prop_new:N \g_scikg_label_anchor_prop
 \prop_new:N \g_scikg_label_text_prop
+
+\tl_new:N \g_scikg_embed_jsonl_file_tl
+\tl_new:N \g_scikg_embed_tsv_file_tl
+\tl_new:N \g_scikg_embed_names_tl
+\tl_new:N \g_scikg_embed_af_tl
 
 % ============================================================
 % Local annotation state
@@ -302,10 +309,10 @@
     \tl_set:NV \l_scikg_s_page_tl   \l_scikg_page_tl
   }
 
-\cs_new_protected:Npn \scikg_write_tsv:
+\cs_new_protected:Npn \scikg_write_tsv_to:N #1
   {
     \scikg_prepare_sanitized_fields:
-    \iow_now:Nx \g_scikg_out_iow
+    \iow_now:Nx #1
       {
         \int_use:N \g_scikg_annotation_int \iow_char:N \^^I
         \l_scikg_s_anchor_tl \iow_char:N \^^I
@@ -317,6 +324,9 @@
         \l_scikg_s_text_tl
       }
   }
+
+\cs_new_protected:Npn \scikg_write_tsv:
+  { \scikg_write_tsv_to:N \g_scikg_out_iow }
 
 \cs_new_protected:Npn \scikg_write_jsonl_to:N #1
   {
@@ -337,19 +347,82 @@
   }
 
 \cs_new_protected:Npn \scikg_write_jsonl:
-  { \scikg_write_jsonl_to:N \g_scikg_out_iow }
+  { \scikg_write_jsonl_to:N \g_scikg_jsonl_iow }
 
 \cs_new_protected:Npn \scikg_write_annotation:
   {
     \str_if_eq:VnTF \g_scikg_format_tl { jsonl }
-      { \scikg_write_jsonl: }
+      {
+        \scikg_write_jsonl:
+        \scikg_write_tsv_to:N \g_scikg_embed_tsv_iow
+      }
       {
         \str_if_eq:VnTF \g_scikg_format_tl { both }
           {
             \scikg_write_tsv:
             \scikg_write_jsonl_to:N \g_scikg_jsonl_iow
           }
-          { \scikg_write_tsv: }
+          {
+            \scikg_write_tsv:
+            \scikg_write_jsonl_to:N \g_scikg_embed_jsonl_iow
+          }
+      }
+  }
+
+\cs_new_protected:Npn \scikg_embed_register_filespec:nnnn #1#2#3#4
+  {
+    \group_begin:
+      \immediate\pdfobj stream attr{ /Type /EmbeddedFile /Subtype /#3 } file{#1}
+      \tl_set:Nx \l_tmpa_tl { \tex_the:D \pdflastobj \c_space_tl 0 \c_space_tl R }
+      \immediate\pdfobj
+        {
+          <<
+            /Type /Filespec
+            /F (\pdfescapestring{#2})
+            /UF (\pdfescapestring{#2})
+            /EF << /F \l_tmpa_tl /UF \l_tmpa_tl >>
+            /Desc (\pdfescapestring{#4})
+            /AFRelationship /Data
+          >>
+        }
+      \tl_set:Nx \l_tmpb_tl { \tex_the:D \pdflastobj \c_space_tl 0 \c_space_tl R }
+      \tl_gput_right:Nx \g_scikg_embed_names_tl
+        { (\pdfescapestring{#2}) \c_space_tl \l_tmpb_tl \c_space_tl }
+      \tl_gput_right:Nx \g_scikg_embed_af_tl
+        { \l_tmpb_tl \c_space_tl }
+    \group_end:
+  }
+
+\cs_new_protected:Npn \scikg_embed_jsonl_file:
+  {
+    \scikg_embed_register_filespec:nnnn
+      { \g_scikg_embed_jsonl_file_tl }
+      { \jobname.scikg.jsonl }
+      { application\c_hash_str2Fjson }
+      { SciKG annotation export (JSONL) }
+  }
+
+\cs_new_protected:Npn \scikg_embed_tsv_file:
+  {
+    \scikg_embed_register_filespec:nnnn
+      { \g_scikg_embed_tsv_file_tl }
+      { \jobname.scikg.tsv }
+      { text\c_hash_str2Ftab-separated-values }
+      { SciKG annotation export (TSV) }
+  }
+
+\cs_new_protected:Npn \scikg_register_embedded_files:
+  {
+    \tl_if_empty:NF \g_scikg_embed_names_tl
+      {
+        \pdfnames
+          {
+            /EmbeddedFiles << /Names [ \g_scikg_embed_names_tl ] >>
+          }
+        \pdfcatalog
+          {
+            /AF [ \g_scikg_embed_af_tl ]
+          }
       }
   }
 
@@ -407,6 +480,8 @@
 
 \AtBeginDocument
   {
+    \tl_gclear:N \g_scikg_embed_names_tl
+    \tl_gclear:N \g_scikg_embed_af_tl
     \hypersetup
       {
         pdftitle    = {\g_scikg_title_tl},
@@ -417,7 +492,11 @@
 
     \str_if_eq:VnTF \g_scikg_format_tl { jsonl }
       {
-        \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.jsonl }
+        \iow_open:Nn \g_scikg_jsonl_iow { \jobname.scikg.jsonl }
+        \tl_gset:Nn \g_scikg_embed_jsonl_file_tl { \jobname.scikg.jsonl }
+        \iow_open:Nn \g_scikg_embed_tsv_iow { \jobname.scikg.embed.tsv }
+        \iow_now:Nn  \g_scikg_embed_tsv_iow { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
+        \tl_gset:Nn \g_scikg_embed_tsv_file_tl { \jobname.scikg.embed.tsv }
       }
       {
         \str_if_eq:VnTF \g_scikg_format_tl { both }
@@ -425,19 +504,40 @@
             \iow_open:Nn \g_scikg_out_iow  { \jobname.scikg.tsv }
             \iow_now:Nn  \g_scikg_out_iow  { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
             \iow_open:Nn \g_scikg_jsonl_iow { \jobname.scikg.jsonl }
+            \tl_gset:Nn \g_scikg_embed_jsonl_file_tl { \jobname.scikg.jsonl }
+            \tl_gset:Nn \g_scikg_embed_tsv_file_tl   { \jobname.scikg.tsv }
           }
           {
             \iow_open:Nn \g_scikg_out_iow { \jobname.scikg.tsv }
             \iow_now:Nn  \g_scikg_out_iow { n^^Ianchor^^Imode^^Itype^^Iid^^Ilabel^^Ipage^^Itext }
+            \iow_open:Nn \g_scikg_embed_jsonl_iow { \jobname.scikg.embed.jsonl }
+            \tl_gset:Nn \g_scikg_embed_jsonl_file_tl { \jobname.scikg.embed.jsonl }
+            \tl_gset:Nn \g_scikg_embed_tsv_file_tl   { \jobname.scikg.tsv }
           }
       }
   }
 
 \AtEndDocument
   {
-    \iow_close:N \g_scikg_out_iow
-    \str_if_eq:VnT \g_scikg_format_tl { both }
-      { \iow_close:N \g_scikg_jsonl_iow }
+    \str_if_eq:VnTF \g_scikg_format_tl { jsonl }
+      {
+        \iow_close:N \g_scikg_jsonl_iow
+        \iow_close:N \g_scikg_embed_tsv_iow
+      }
+      {
+        \str_if_eq:VnTF \g_scikg_format_tl { both }
+          {
+            \iow_close:N \g_scikg_out_iow
+            \iow_close:N \g_scikg_jsonl_iow
+          }
+          {
+            \iow_close:N \g_scikg_out_iow
+            \iow_close:N \g_scikg_embed_jsonl_iow
+          }
+      }
+    \scikg_embed_jsonl_file:
+    \scikg_embed_tsv_file:
+    \scikg_register_embedded_files:
   }
 
 \ExplSyntaxOff

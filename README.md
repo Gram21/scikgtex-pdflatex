@@ -17,6 +17,7 @@ It also supports:
 
 - document-level PDF metadata
 - sidecar export in TSV and JSONL format (both by default), or one format exclusively
+- embedding both annotation exports into the generated PDF as attached files with viewer-visible names and descriptions
 - optional annotation anchors
 - references to labeled annotations with `\scikgref{...}`
 
@@ -53,6 +54,7 @@ This prints `Cytoscape` normally in the document and also writes an annotation r
    - `*.scikg.tsv` and `*.scikg.jsonl` (default: both)
    - `*.scikg.tsv` only if `format=tsv`
    - `*.scikg.jsonl` only if `format=jsonl`
+5. Inspect the PDF attachments if you want to confirm that the JSONL and TSV exports were embedded into the PDF.
 
 ## Recommended usage
 
